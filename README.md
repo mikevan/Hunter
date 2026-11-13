@@ -11,3 +11,5 @@ Run native host checks with `python test/run_host_tests.py` using a C++17 compil
 Build with `pio run -e tdongle_c5_hunter`. No hardware is flashed by a build. The legacy `tdongle_c5_vixen` environment is the old fox-hunt beacon, not the Vixen flagship.
 
 Source ancestry is recorded in `EXTRACTION.json`; original Git history remains in LayerTime. EXTRACTION.json records the initial local preparation; subsequent checkpoints are recorded in Git history.
+
+GitHub Actions runs dependency guard tests, host checks and a clean firmware build on every push and pull request. Successful runs retain firmware, ELF files and logs for 14 days. Shared-library candidate runs test temporary pins without updating this product. See the [hardware acceptance checklist](https://github.com/mikevan/LayerTime/blob/main/docs/firmware/hardware-acceptance.md).

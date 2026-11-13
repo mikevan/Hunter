@@ -52,6 +52,11 @@ jobs:
           CANDIDATE_REPOSITORY: ${{ inputs.candidate_repository }}
           CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
         run: python ci-tools/tools/ci/test_dependency_candidate.py
+      - name: Record exact source and dependency commits
+        shell: bash
+        run: |
+          git -C product show -s --format=fuller HEAD > product/source-manifest.txt
+          git -C product submodule status --recursive >> product/source-manifest.txt
       - name: Run guards and host tests
         shell: bash
         run: |
@@ -67,6 +72,7 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
           path: |
+            product/source-manifest.txt
             product/guard.log
             product/host.log
             product/candidate-validation.json
@@ -102,6 +108,11 @@ jobs:
           CANDIDATE_REPOSITORY: ${{ inputs.candidate_repository }}
           CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
         run: python ci-tools/tools/ci/test_dependency_candidate.py
+      - name: Record exact source and dependency commits
+        shell: bash
+        run: |
+          git -C product show -s --format=fuller HEAD > product/source-manifest.txt
+          git -C product submodule status --recursive >> product/source-manifest.txt
       - name: Install PlatformIO
         run: python -m pip install platformio==6.2.0
       - name: Build Hunter firmware
@@ -118,6 +129,7 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
           path: |
+            product/source-manifest.txt
             product/firmware.log
             product/bin/build/tdongle_c5_hunter/firmware.bin
             product/bin/build/tdongle_c5_hunter/firmware.elf
