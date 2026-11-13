@@ -2,7 +2,9 @@
 
 LilyGO T-Dongle-C5 sensor, SD logging, PCAP evidence and card-transfer product. The Hunter logo is unchanged.
 
-Keep LayerTime-Core, LayerTime-C5 and LayerTime-Sensors as sibling checkouts. Run `python tools/dependencies_check.py` before building. The build repeats this content-lock check.
+Clone with `git clone --recurse-submodules https://github.com/mikevan/Hunter.git`, or run `git submodule update --init --recursive` in an existing checkout. Core and C5 board support live under `libraries/`; Sensors lives under `sensors/`. No sibling repositories are required.
+
+Run `python tools/dependencies_check.py` before building. The build checks the recorded Git commits, clean dependency worktrees and the existing content hashes. Update each gitlink and its lock entry together when adopting a new library revision.
 
 Run native host checks with `python test/run_host_tests.py` using a C++17 compiler.
 

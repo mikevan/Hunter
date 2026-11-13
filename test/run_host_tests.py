@@ -1,6 +1,5 @@
-"""Run Hunter's existing host tests with only sibling shared repositories.
+"""Run Hunter's existing host tests with its pinned shared repository checkouts.
 
-Installed as Hunter/test/run_host_tests.py by prepare_repositories.py.
 Requires a native C++17 compiler, not an ESP32 cross-compiler.
 """
 import argparse
@@ -16,9 +15,9 @@ def main():
     parser.add_argument("--cxx", default=os.environ.get("CXX", "g++"))
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
-    core = root.parent / "LayerTime-Core"
-    board = root.parent / "LayerTime-C5"
-    sensors = root.parent / "LayerTime-Sensors"
+    core = root / "libraries/LayerTime-Core"
+    board = root / "libraries/LayerTime-C5"
+    sensors = root / "sensors"
     subprocess.run([sys.executable, str(root / "tools/dependencies_check.py")], check=True)
     includes = [core / "test", core / "src", board / "src", sensors / "src", root / "src"]
     sources = [root / "test/test_tdongle_c5_bringup/test_tdongle_c5_bringup.cpp",

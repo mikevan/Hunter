@@ -1,8 +1,8 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "libraries": {
     "LayerTime-Core": {
-      "path": "../LayerTime-Core",
+      "path": "libraries/LayerTime-Core",
       "files": {
         "src/core/app/LayerTimeCore.cpp": "dbdd827406eeede14347bf9ec99ccf069b8271e6b9aa978db1e044ece1dc6a19",
         "src/core/app/LayerTimeCore.h": "0c2732ab6be66c068d612365bbb9dbedd7b7d7b87403fc8e7846de81e26858a0",
@@ -69,10 +69,13 @@
         "src/core/ports/ReconRadio.h": "a3a2dd8392903cf5e320c9265c87e4aee33be5e9e48ae496902697df65f9fea1",
         "src/core/ports/SettingsStore.h": "efab7e66a0da2d94bcf5eb31cd5bd7f28aadc36ead7b8790c57bc8b18bd93830",
         "library.json": "0546918b22f9f06c2ab933c5f67bf5713d1279238989601660a6ff3c47060973"
-      }
+      },
+      "submodule": "shared-core",
+      "revision": "9d87bc399b267ef889c43e4c3dbb215443b682df",
+      "url": "https://github.com/mikevan/LayerTime-Core.git"
     },
     "LayerTime-C5": {
-      "path": "../LayerTime-C5",
+      "path": "libraries/LayerTime-C5",
       "files": {
         "src/BringUpLogic.cpp": "7b49e3e47ca1585e8e0045729a8d6fe7a354f59e971e731b0abcc0a079b04a5f",
         "src/BringUpLogic.h": "f2a89f325a8add884103a55b867ea5ae465b9b7611cfe46f7ed3f267f0b45325",
@@ -85,10 +88,13 @@
         "src/C5LogoImages.h": "a516690324240bd24729b110d15d2d08888d47159615d49a0c5498a19783e749",
         "src/TDongleC5Pins.h": "8ff348aa8d4992a578db457978ab9f032876ab9edd8431886fe1878671d37550",
         "library.json": "f72888bba7725cc467f421779eb8f7d8ecbbcae1487e3cab50a140a16eb7d164"
-      }
+      },
+      "submodule": "shared-c5",
+      "revision": "652eb8dabcd7ffec58615c09df56f908de2197db",
+      "url": "https://github.com/mikevan/LayerTime-C5.git"
     },
     "LayerTime-Sensors": {
-      "path": "../LayerTime-Sensors",
+      "path": "sensors",
       "files": {
         "src/lts/BleAdvertClassifier.cpp": "f3d7fa294b8be99d3b50efcf6481cd9fc23f3721c00633ac2c5b0082510616b8",
         "src/lts/BleAdvertClassifier.h": "26647e6afde084a8dc41e5fb016b695e94b844db2e934188aa0257a78a4d649e",
@@ -100,7 +106,10 @@
         "src/lts/WifiFrameClassifier.cpp": "e2c1e55b259bb34d981b3fabb68fd3352bb8e460a8181615adc2fd909bf3a954",
         "src/lts/WifiFrameClassifier.h": "fd77dea2ba66f7dd9b233d92664c292f9758a800b953be5963cc206e2697d2f7",
         "library.json": "04461a96cb14eaa67a2823e423c6132c25b927ea8eb16f861bb8c6ddbac16fa9"
-      }
+      },
+      "submodule": "shared-sensors",
+      "revision": "35e7213874d4577bd9385f226b20e614a65fbfa8",
+      "url": "https://github.com/mikevan/LayerTime-Sensors.git"
     }
   }
 }

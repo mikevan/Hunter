@@ -36,7 +36,7 @@ import struct
 from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]  # the repository root
-OUTPUT = ROOT.parent / "LayerTime-C5/src/C5LogoImages.cpp"
+OUTPUT = ROOT / "libraries/LayerTime-C5/src/C5LogoImages.cpp"
 
 SIZE = 56   # pixels, square
 PAD = 1     # pixels of black around the artwork

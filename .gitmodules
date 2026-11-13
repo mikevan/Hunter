@@ -1,0 +1,9 @@
+[submodule "shared-core"]
+	path = libraries/LayerTime-Core
+	url = https://github.com/mikevan/LayerTime-Core.git
+[submodule "shared-c5"]
+	path = libraries/LayerTime-C5
+	url = https://github.com/mikevan/LayerTime-C5.git
+[submodule "shared-sensors"]
+	path = sensors
+	url = https://github.com/mikevan/LayerTime-Sensors.git
