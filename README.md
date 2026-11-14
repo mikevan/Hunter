@@ -1,5 +1,11 @@
 # Hunter
 
+People need evidence they can keep, examine, and use to make informed decisions. Hunter puts wireless observation in their hands, making otherwise unseen activity available for local recording and analysis.
+
+Hunter passively records supported Wi-Fi/BLE observations and preserves evidence locally. Vixen uses those observations for analysis; T-Ultra supplies an independent record for comparison. A detected signature is an indicator, not proof of who operates a device or what they intend.
+
+This repository provides the dedicated capture product. Its contribution is accountable evidence: what was observed, when it was observed, and what was actually saved.
+
 LilyGO T-Dongle-C5 sensor, SD logging, PCAP evidence and card-transfer product. The Hunter logo is unchanged.
 
 Clone with `git clone --recurse-submodules https://github.com/mikevan/Hunter.git`, or run `git submodule update --init --recursive` in an existing checkout. Core and C5 board support live under `libraries/`; Sensors lives under `sensors/`. No sibling repositories are required.
