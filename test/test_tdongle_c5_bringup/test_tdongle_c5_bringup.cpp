@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "BringUpLogic.h"
+#include "core/logic/ReconSelection.h"
 #include "CardTransferLogic.h"
 #include "SdLogLogic.h"
 
@@ -261,11 +262,12 @@ void unit_names_fit_the_link_and_fail_cleanly()
     CHECK_STR("", name);
 }
 
-// Trackers off by default (2026-11-06): the Hunter's starting list matches
-// LayerScope's (SensorSelectionTest.trackersStartOff, 0x43BE0).
+// Fresh settings enable Remote ID and leave trackers off.
 void a_hunter_without_a_saved_list_runs_every_sensor_but_the_trackers()
 {
-    CHECK_INT(0x43BE0, static_cast<int>(kHunterDefaultSensorMask));
+    CHECK_INT(0xC3BE0, static_cast<int>(kHunterDefaultSensorMask));
+    CHECK_TRUE((kHunterDefaultSensorMask & (1u << 19)) != 0); // Remote ID on
+    CHECK_TRUE(layertime::recon::validSensorMask(0x43BE0));   // Legacy saved mask
     CHECK_TRUE((kHunterDefaultSensorMask & kTrackerSensorBits) == 0);
     CHECK_TRUE((kHunterDefaultSensorMask | kTrackerSensorBits) == layertime::kAllSensorsMask);
     CHECK_TRUE((kHunterDefaultSensorMask & (1u << 5)) != 0);  // Deauth on

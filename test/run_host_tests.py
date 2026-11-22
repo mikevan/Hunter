@@ -23,7 +23,7 @@ def main():
     sources = [root / "test/test_tdongle_c5_bringup/test_tdongle_c5_bringup.cpp",
                board / "src/BringUpLogic.cpp", root / "src/SdLogLogic.cpp",
                root / "src/CardTransferLogic.cpp", core / "src/core/link/LinkCard.cpp",
-               core / "src/core/link/LinkCodec.cpp"]
+               core / "src/core/link/LinkCodec.cpp", core / "src/core/logic/ReconSelection.cpp"]
     with tempfile.TemporaryDirectory(prefix="hunter-host-tests-") as temp:
         binary = Path(temp) / ("tests.exe" if os.name == "nt" else "tests")
         command = [args.cxx, "-std=c++17", "-O0", "-Wall", "-Wextra"]

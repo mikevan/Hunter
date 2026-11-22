@@ -58,6 +58,13 @@ void bleManufacturerThunk(uint8_t index, std::string &out, const void *context)
     out = static_cast<const NimBLEAdvertisedDevice *>(context)->getManufacturerData(index);
 }
 
+bool bleRemoteIdThunk(std::string &out, const void *context)
+{
+    const auto *device = static_cast<const NimBLEAdvertisedDevice *>(context);
+    out = device->getServiceData(NimBLEUUID(uint16_t(0xfffa)));
+    return !out.empty();
+}
+
 bool bleUuid16Thunk(uint8_t index, uint16_t &out, const void *context)
 {
     const NimBLEUUID uuid = static_cast<const NimBLEAdvertisedDevice *>(context)->getServiceUUID(index);
@@ -267,8 +274,13 @@ void C5ReconRadio::resetDetectorState()
 
 void C5ReconRadio::startWifiMonitoring(uint8_t channel)
 {
-    const bool modeOk = WiFi.mode(WIFI_STA);
+    if (WiFi.getMode() == WIFI_OFF) begin(_dualBand);
+    const bool modeOk = WiFi.getMode() == WIFI_STA;
     c5ConnectionTrace("wifi-monitor-mode", modeOk);
+    if (!modeOk) {
+        Serial.println("Hunter Wi-Fi monitoring start failed");
+        return;
+    }
     WiFi.disconnect(false, false);
     _activeInstance = this;
     esp_wifi_set_promiscuous(false);
@@ -308,6 +320,9 @@ void C5ReconRadio::stopWifiMonitoring()
 void C5ReconRadio::startBleScan(ReconTarget detector, uint32_t durationMs)
 {
     stopWifiMonitoring();
+    // Return the Wi-Fi driver's memory before scheduling a BLE scan.
+    // The next Wi-Fi pass restores the configured band in begin().
+    if (WiFi.getMode() != WIFI_OFF) WiFi.mode(WIFI_OFF);
     delay(120);
     if (!_bleInitialized) {
         if (!NimBLEDevice::isInitialized()) NimBLEDevice::init("LayerTime");
@@ -325,9 +340,14 @@ void C5ReconRadio::startBleScan(ReconTarget detector, uint32_t durationMs)
     _currentBleScanDetector = detector;
     _firstAdvertInScan = true;
     gBleActiveInstance = this;
-    ++_counters.bleScanStarts;
-    if (_stage) _stage->record(recon::Stage::BleScanStart, static_cast<uint8_t>(detector), 0, durationMs);
     const bool started = scan->start(durationMs, false);
+    if (started) {
+        ++_counters.bleScanStarts;
+        if (_stage) _stage->record(recon::Stage::BleScanStart, static_cast<uint8_t>(detector), 0, durationMs);
+    } else {
+        Serial.printf("Hunter BLE scan refused: target=%u free=%lu\n",
+                      static_cast<unsigned>(detector), static_cast<unsigned long>(ESP.getFreeHeap()));
+    }
     c5ConnectionTrace("ble-scan-start", started);
 }
 
@@ -461,6 +481,7 @@ void C5ReconRadio::handleBleAdvertisement(const NimBLEAdvertisedDevice *device)
     advert.manufacturer = bleManufacturerThunk;
     advert.uuidCount = device->haveServiceUUID() ? device->getServiceUUIDCount() : 0;
     advert.uuid16 = bleUuid16Thunk;
+    advert.remoteIdServiceData = bleRemoteIdThunk;
     advert.context = device;
 
     recon::classifyBleAdvert(advert, _currentBleScanDetector, bleCandidateThunk, this);

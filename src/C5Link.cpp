@@ -65,7 +65,7 @@ public:
     }
     void onDisconnect(NimBLEServer *, NimBLEConnInfo &, int reason) override
     {
-        if (gLink) gLink->onDisconnected();
+        if (gLink) gLink->onDisconnected(reason);
         c5ConnectionTrace("disconnected-before-auto-advertise", reason);
         // advertiseOnDisconnect(true) restarts advertising; nothing to do here.
     }
@@ -126,7 +126,10 @@ bool C5Link::begin(uint16_t capabilities)
     chipShortName(ESP.getChipModel(), chip, sizeof(chip));
     if (!formatUnitName("Hunter", chip, mac, _name, sizeof(_name))) snprintf(_name, sizeof(_name), "Hunter");
 
-    if (!NimBLEDevice::init(_name)) return false;
+    if (!NimBLEDevice::init(_name)) {
+        Serial.println("BLE Link startup failed: NimBLE init");
+        return false;
+    }
     // The frame ceiling is 20 bytes by contract; a larger MTU only matters
     // for the Probe measurement, which the central decides by negotiating.
     NimBLEDevice::setMTU(247);
@@ -149,22 +152,53 @@ bool C5Link::begin(uint16_t capabilities)
     uint8_t frame[link::kMaxFrame];
     gStatus->setValue(frame, static_cast<uint16_t>(link::encodeStatus(_status, frame)));
 
+    _advertisingStartPending = !startAdvertising();
+    return !_advertisingStartPending;
+}
+
+bool C5Link::advertising() const
+{
+    return NimBLEDevice::isInitialized() && NimBLEDevice::getAdvertising()->isAdvertising();
+}
+
+bool C5Link::startAdvertising()
+{
+    _lastAdvertisingAttemptMs = millis();
     NimBLEAdvertising *adv = NimBLEDevice::getAdvertising();
     NimBLEAdvertisementData primary;
-    primary.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
-    primary.addServiceUUID(link::kServiceUuid);
     NimBLEAdvertisementData scanResponse;
-    scanResponse.setName(_name);
-    adv->setAdvertisementData(primary);
-    adv->setScanResponseData(scanResponse);
+    if (!primary.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP) ||
+        !primary.addServiceUUID(link::kServiceUuid) ||
+        !scanResponse.setName(_name)) {
+        Serial.println("BLE Link startup failed: build advertising payload");
+        return false;
+    }
+    if (!adv->setAdvertisementData(primary)) {
+        Serial.println("BLE Link startup failed: write primary advertisement");
+        return false;
+    }
+    if (!adv->setScanResponseData(scanResponse)) {
+        Serial.println("BLE Link startup failed: write scan response");
+        return false;
+    }
     adv->enableScanResponse(true);
+    if (!gServer->start()) {
+        Serial.println("BLE Link startup failed: GATT server");
+        return false;
+    }
     const bool started = adv->start();
+    if (!started) Serial.println("BLE Link startup failed: advertising start");
     c5ConnectionTrace("advertise-start", started);
     return started;
 }
 
 void C5Link::service(uint32_t nowMs)
 {
+    if (gServer != nullptr && !_connected && !advertising() &&
+        nowMs - _lastAdvertisingAttemptMs >= 3000) {
+        _advertisingStartPending = !startAdvertising();
+        if (!_advertisingStartPending) Serial.println("BLE Link advertising recovered");
+    }
 #if defined(LAYERTIME_DIAG_CONNECTION_TRACE)
     static uint32_t lastTraceMs = 0;
     if (nowMs - lastTraceMs >= 10000) {
@@ -277,22 +311,32 @@ void C5Link::serviceRequests(uint32_t nowMs)
         unlockIo();
         ++_requestsAnswered;
     }
+    constexpr uint32_t kNotifyRetryMs = 30;
     for (uint8_t i = 0; i < kFramesPerService; ++i) {
         uint8_t frame[link::kMaxFrame];
         lockIo();
         const size_t len = _pipe.front(frame);
+        const uint32_t connection = _connection;
+        const bool waiting = _notifyBackingOff && nowMs - _lastNotifyRefusalMs < kNotifyRetryMs;
         unlockIo();
-        if (len == 0) break;
-        if (!_connected) break;
-        if (!gData->notify(frame, len)) {
-            // NimBLE is out of buffers: keep the frame and try next pass.
-            ++_notifyRefused;
+        if (len == 0 || !_connected || waiting) break;
+
+        const bool sent = gData->notify(frame, len);
+        lockIo();
+        if (connection != _connection) {
+            unlockIo();
             break;
         }
-        lockIo();
-        _pipe.pop();
+        _notifyBackingOff = !sent;
+        if (sent) {
+            _pipe.pop();
+            ++_framesSent;
+        } else {
+            _lastNotifyRefusalMs = nowMs;
+            ++_notifyRefused;
+        }
         unlockIo();
-        ++_framesSent;
+        if (!sent) break;
     }
 }
 
@@ -322,14 +366,16 @@ void C5Link::onConnected(const char *peer, uint16_t mtu)
     notifyStatus(millis());
 }
 
-void C5Link::onDisconnected()
+void C5Link::onDisconnected(int reason)
 {
+    Serial.printf("BLE Link disconnected: reason=0x%X\n", static_cast<unsigned>(reason));
     _connected = false;
     _peer[0] = '\0';
     // The central is gone: a waiting request and unsent reply frames go with
     // it. A reply in progress in the loop finishes into an empty pipe.
     lockIo();
     _pipe.clear();
+    _notifyBackingOff = false;
     ++_connection;
     unlockIo();
 }
