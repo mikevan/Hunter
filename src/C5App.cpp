@@ -100,6 +100,7 @@
 #include <esp_chip_info.h>
 #include <esp_mac.h>
 #include <esp_heap_caps.h>
+#include <new>
 #include <esp_idf_version.h>
 #include <esp_random.h>
 #include <esp_timer.h>
@@ -924,20 +925,30 @@ void printCounters(const char *when)
 // Copies the events out under the lock and prints them after it.
 void printEvents()
 {
-    static MonitorEvent copy[ReconState::kMaxEvents];
+    struct EventSnapshot {
+        MonitorEvent events[ReconState::kMaxEvents];
+    };
+    void *storage = heap_caps_malloc(sizeof(EventSnapshot), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (storage == nullptr) {
+        Serial.println("events unavailable: no PSRAM for the dump snapshot");
+        return;
+    }
+    auto *snapshot = new (storage) EventSnapshot;
     lockEvents(nullptr);
     const uint8_t n = gCore.eventCount();
-    for (uint8_t i = 0; i < n; ++i) copy[i] = gCore.event(i);
+    for (uint8_t i = 0; i < n; ++i) snapshot->events[i] = gCore.event(i);
     unlockEvents(nullptr);
     Serial.printf("events %u:\n", static_cast<unsigned>(n));
     for (uint8_t i = 0; i < n; ++i) {
-        const MonitorEvent &e = copy[i];
+        const MonitorEvent &e = snapshot->events[i];
         Serial.printf("E,%lu,%s,%s,%s,%s,%d,%u,%lu,%lu,%u,%u\n", static_cast<unsigned long>(e.eventId),
                       recon::detectorName(e.detector), recon::confidenceLabel(e.confidence), e.sourceId, e.detail,
                       static_cast<int>(e.rssi), static_cast<unsigned>(e.channel),
                       static_cast<unsigned long>(e.lastSeen.uptimeMs), static_cast<unsigned long>(e.count),
                       static_cast<unsigned>(e.sourceKind), static_cast<unsigned>(e.band));
     }
+    snapshot->~EventSnapshot();
+    heap_caps_free(storage);
 }
 
 // The run's stage records as CSV (S,stage,t_us,a8,a16,a32), as in 2A. The

@@ -14,6 +14,10 @@ on:
       candidate_revision:
         type: string
         default: ''
+      download_bundle:
+        description: Build the additional public download artifacts
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -121,6 +125,23 @@ jobs:
           set -o pipefail
           cd product
           pio run -e tdongle_c5_hunter -j 2 2>&1 | tee firmware.log
+      - name: Build Vixen beacon and stage both factory images
+        if: inputs.download_bundle && inputs.candidate_repository == ''
+        shell: bash
+        working-directory: product
+        run: |
+          pio run -e tdongle_c5_vixen -j 2
+          mkdir -p downloads
+          cp bin/build/tdongle_c5_hunter/firmware.factory.bin downloads/hunter.bin
+          cp bin/build/tdongle_c5_vixen/firmware.factory.bin downloads/vixen.bin
+          git rev-parse HEAD > downloads/source.txt
+      - name: Upload factory images for the download page
+        if: inputs.download_bundle && inputs.candidate_repository == ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hunter-download-bundle
+          if-no-files-found: error
+          path: product/downloads/
       - name: Save build results and logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
