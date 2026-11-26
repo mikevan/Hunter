@@ -100,6 +100,7 @@
 #include <esp_chip_info.h>
 #include <esp_mac.h>
 #include <esp_heap_caps.h>
+#include <new>
 #include <esp_idf_version.h>
 #include <esp_random.h>
 #include <esp_timer.h>
@@ -448,11 +449,16 @@ void applyEarlyWarningIfChanged()
     Serial.printf("early warning %s at %lu ms\n", wanted ? "on" : "off", static_cast<unsigned long>(millis()));
 }
 
-// The Hunter's settings store (2026-11-04). It keeps one thing between boots:
-// the SetSensors allow-list, in NVS namespace "hunter", key "sensors". Every
-// other ApplicationSettings field is set on each boot: early warning OFF (the
-// Hunter powers up stopped), sleep mode off, as core's defaults otherwise. A stored value that is not a valid mask (a corrupt
-// or future one) is ignored and every sensor stays on.
+#ifdef LAYERTIME_HUNTER_FRESH_MASK_TEST
+// The diagnostic reads a separate key that the settings store never writes.
+constexpr char kSensorMaskKey[] = "freshMaskTest";
+constexpr bool kHunterSettingsReadOnly = true;
+#else
+constexpr char kSensorMaskKey[] = "sensors";
+constexpr bool kHunterSettingsReadOnly = false;
+#endif
+
+// Hunter persists the sensor allow-list and evidence hold in NVS.
 class HunterSettingsStore : public SettingsStore {
 public:
     void load(ApplicationSettings &out) override
@@ -468,7 +474,7 @@ public:
         Preferences prefs;
         // Read-only open fails until the namespace has been written once.
         if (!prefs.begin("hunter", true)) return;
-        const uint32_t mask = prefs.getULong("sensors", kHunterDefaultSensorMask);
+        const uint32_t mask = prefs.getULong(kSensorMaskKey, kHunterDefaultSensorMask);
         const uint8_t holdSec = prefs.getUChar("evhold", kDefaultEvidenceHoldSec);
         prefs.end();
         if (recon::validSensorMask(mask)) out.sensorMask = mask;
@@ -477,9 +483,10 @@ public:
     }
     void save(const ApplicationSettings &settings) override
     {
+        if (kHunterSettingsReadOnly) return;
         Preferences prefs;
         if (!prefs.begin("hunter", false)) return;
-        prefs.putULong("sensors", settings.sensorMask);
+        prefs.putULong(kSensorMaskKey, settings.sensorMask);
         prefs.putUChar("evhold", settings.evidenceHoldSec);
         prefs.end();
     }
@@ -858,10 +865,14 @@ void printCounters(const char *when)
                   static_cast<unsigned long>(heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)),
                   static_cast<unsigned long>(ESP.getFreePsram()), gHeapOk ? "intact" : "CORRUPT");
     const link::LinkServer::Counters &s = gServer.counters();
+    reportf("[%s] Sensors 0x%05lX%s\n", when,
+            static_cast<unsigned long>(gSensorMaskSaved),
+            kHunterSettingsReadOnly ? " (fresh-mask test, read-only)" : "");
     reportf("[%s] link %s peer %s session %04X changeSeq %lu heartbeat %u | connects %lu disconnects %lu | "
                   "pings %lu requests %lu commands %lu getChanged %lu getText %lu summaries %lu gaps %lu | "
                   "frames sent %lu refused %lu dropped %lu busy %lu | status change notifies %lu\n",
-                  when, gLink.connected() ? "connected" : "advertising", gLink.connected() ? gLink.peerAddress() : "-",
+                  when, gLink.connected() ? "connected" : gLink.advertising() ? "advertising" : "off",
+                  gLink.connected() ? gLink.peerAddress() : "-",
                   static_cast<unsigned>(gLink.sessionId()), static_cast<unsigned long>(gLink.changeSeq()),
                   static_cast<unsigned>(gLink.heartbeat()), static_cast<unsigned long>(gConnects),
                   static_cast<unsigned long>(gDisconnects), static_cast<unsigned long>(gLink.pingsAnswered()),
@@ -914,20 +925,30 @@ void printCounters(const char *when)
 // Copies the events out under the lock and prints them after it.
 void printEvents()
 {
-    static MonitorEvent copy[ReconState::kMaxEvents];
+    struct EventSnapshot {
+        MonitorEvent events[ReconState::kMaxEvents];
+    };
+    void *storage = heap_caps_malloc(sizeof(EventSnapshot), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (storage == nullptr) {
+        Serial.println("events unavailable: no PSRAM for the dump snapshot");
+        return;
+    }
+    auto *snapshot = new (storage) EventSnapshot;
     lockEvents(nullptr);
     const uint8_t n = gCore.eventCount();
-    for (uint8_t i = 0; i < n; ++i) copy[i] = gCore.event(i);
+    for (uint8_t i = 0; i < n; ++i) snapshot->events[i] = gCore.event(i);
     unlockEvents(nullptr);
     Serial.printf("events %u:\n", static_cast<unsigned>(n));
     for (uint8_t i = 0; i < n; ++i) {
-        const MonitorEvent &e = copy[i];
+        const MonitorEvent &e = snapshot->events[i];
         Serial.printf("E,%lu,%s,%s,%s,%s,%d,%u,%lu,%lu,%u,%u\n", static_cast<unsigned long>(e.eventId),
                       recon::detectorName(e.detector), recon::confidenceLabel(e.confidence), e.sourceId, e.detail,
                       static_cast<int>(e.rssi), static_cast<unsigned>(e.channel),
                       static_cast<unsigned long>(e.lastSeen.uptimeMs), static_cast<unsigned long>(e.count),
                       static_cast<unsigned>(e.sourceKind), static_cast<unsigned>(e.band));
     }
+    snapshot->~EventSnapshot();
+    heap_caps_free(storage);
 }
 
 // The run's stage records as CSV (S,stage,t_us,a8,a16,a32), as in 2A. The
@@ -1471,9 +1492,10 @@ void setup()
     // The boot look above decided this; the loop keeps it current.
     gServer.setMemoryOnly(!gSdLog.hasCardLog());
 
-#if defined(LAYERTIME_DIAG_WIFI_OFF)
-    // Connection isolation only: retain the full app but release Wi-Fi before BLE.
+    // The channel plan is cached. Give BLE first use of the internal heap
+    // and let the monitor re-enable Wi-Fi when a scan needs it.
     gRadio.suspendWifiForHunt();
+#if defined(LAYERTIME_DIAG_WIFI_OFF)
     Serial.println("DIAGNOSTIC: Wi-Fi off before BLE; do not start monitoring");
 #endif
     gHeapOk = heapIntact();
@@ -1486,6 +1508,7 @@ void setup()
     gLink.attachEvidence(answerEvidenceRequest, nullptr);
     gBleOk = gLink.begin(link::kCapLocalWifiMonitor | link::kCapLocalBleMonitor | link::kCapDisplay |
                          link::kCapLed | link::kCapButton | link::hunt::kCapHunt | link::kCapSensorSet |
+                         link::kCapRemoteId |
                          link::card::kCapCardRead | link::card::kCapCardClear |
                          (gEvidence.attached() ? (link::evidence::kCapRawCapture | link::kCapEvidenceHold) : 0));
     const bool heapAfterBle = heapIntact();
@@ -1617,7 +1640,7 @@ void loop()
         gWasConnected = gLink.connected();
         if (gWasConnected) ++gConnects; else ++gDisconnects;
         gSdLog.noteLink(gWasConnected, gWasConnected ? gLink.peerAddress() : "", now);
-        Serial.printf("Link %s %s at %lu ms\n", gWasConnected ? "connected to" : "disconnected, advertising again;",
+        Serial.printf("Link %s %s at %lu ms\n", gWasConnected ? "connected to" : "disconnected;",
                       gWasConnected ? gLink.peerAddress() : "", static_cast<unsigned long>(now));
         if (!gScreenAwake) showStatus(); // no redraw while lit (snapshot)
     }

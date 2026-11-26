@@ -104,6 +104,7 @@ public:
     size_t sendNextProbe();
 
     bool connected() const { return _connected; }
+    bool advertising() const;
     uint16_t sessionId() const { return _identity.sessionId; }
     uint8_t heartbeat() const { return _status.heartbeat; }
     uint32_t pingsAnswered() const { return _pings; }
@@ -129,7 +130,7 @@ public:
 
     // NimBLE callbacks route here.
     void onConnected(const char *peer, uint16_t mtu);
-    void onDisconnected();
+    void onDisconnected(int reason);
     void onControlWritten(const uint8_t *data, size_t len);
 
     // The connection's ATT MTU: 23 until the central asks for more. Every
@@ -173,6 +174,9 @@ private:
     uint32_t _evidenceRefused = 0;
     uint8_t _extraFlags = 0; // ORed into Status.flags (setHunting)
     // Guards _status and _pipe, which the BLE task and the loop share.
+    bool startAdvertising();
+    bool _advertisingStartPending = false;
+    uint32_t _lastAdvertisingAttemptMs = 0;
     void *_io = nullptr;
     link::LinkPipe _pipe;
     // Counts disconnects; a reply being built for an earlier connection is
@@ -185,6 +189,8 @@ private:
     uint32_t _busyReplies = 0;
     uint32_t _framesSent = 0;
     uint32_t _notifyRefused = 0;
+    uint32_t _lastNotifyRefusalMs = 0;
+    bool _notifyBackingOff = false;
     uint32_t _changeNotifies = 0;
     bool _connected = false;
     char _peer[18] = "";
